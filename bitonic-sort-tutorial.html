@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bitonic Sort · CUDA 交互式教程</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel-2: #1c2128;
+    --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e;
+    --accent: #76b900; --accent-2: #58a6ff; --accent-3: #f78166;
+    --success: #3fb950; --warn: #d29922; --error: #f85149;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    font-size: 16px; line-height: 1.7;
+  }
+  code, pre, .mono { font-family: "JetBrains Mono", "Fira Code", "SF Mono", Consolas, monospace; }
+  #progress { position: fixed; top: 0; left: 0; height: 3px; background: var(--accent); width: 0%; z-index: 100; transition: width 0.1s; }
+  header.top {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(13,17,23,0.92); backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 24px; display: flex; align-items: center; justify-content: space-between;
+  }
+  header.top h1 { margin: 0; font-size: 17px; font-weight: 600; }
+  header.top h1 .v { color: var(--accent); font-weight: 700; }
+  header.top .meta { font-size: 13px; color: var(--text-dim); }
+  .layout { display: grid; grid-template-columns: 260px 1fr; max-width: 1400px; margin: 0 auto; }
+  nav.toc { position: sticky; top: 50px; align-self: start; height: calc(100vh - 50px); overflow-y: auto; padding: 24px 16px 24px 24px; border-right: 1px solid var(--border); font-size: 14px; }
+  nav.toc h3 { color: var(--accent); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; margin: 18px 0 8px; }
+  nav.toc ul { list-style: none; padding: 0; margin: 0; }
+  nav.toc li { margin: 4px 0; }
+  nav.toc a { color: var(--text-dim); text-decoration: none; display: block; padding: 4px 10px; border-radius: 4px; transition: all 0.15s; font-size: 13px; }
+  nav.toc a:hover { color: var(--text); background: var(--panel); }
+  nav.toc a.active { color: var(--accent); background: var(--panel); border-left: 2px solid var(--accent); padding-left: 8px; }
+  nav.toc .demo-num { display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center; background: var(--panel-2); border-radius: 4px; color: var(--accent); margin-right: 6px; font-weight: 600; font-size: 12px; }
+  nav.toc .sub { padding-left: 34px; font-size: 12px; }
+  main { padding: 32px 48px 80px; max-width: 940px; min-width: 0; }
+  h1.demo { color: var(--text); font-size: 26px; border-bottom: 2px solid var(--accent); padding-bottom: 12px; margin: 48px 0 16px; }
+  h1.demo .num { display: inline-block; width: 40px; height: 40px; line-height: 40px; text-align: center; background: var(--accent); color: var(--bg); border-radius: 6px; margin-right: 16px; font-weight: 700; font-size: 18px; vertical-align: middle; }
+  h2 { color: var(--text); font-size: 20px; margin: 32px 0 12px; }
+  h3 { color: var(--accent-2); font-size: 17px; margin: 24px 0 8px; }
+  h4 { color: var(--text); font-size: 15px; margin: 18px 0 8px; }
+  p { margin: 12px 0; }
+  code:not(pre code) { background: var(--panel-2); padding: 1px 6px; border-radius: 4px; font-size: 0.9em; color: var(--accent); }
+  strong { color: var(--text); }
+  a { color: var(--accent-2); }
+  ul.lst, ol.lst { margin: 12px 0; padding-left: 24px; }
+  ul.lst li, ol.lst li { margin: 6px 0; }
+  .box { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; margin: 16px 0; }
+  .box.tip { border-left: 4px solid var(--accent); }
+  .box.warn { border-left: 4px solid var(--warn); background: rgba(210,153,34,0.06); }
+  .box.danger { border-left: 4px solid var(--error); background: rgba(248,81,73,0.06); }
+  .box.key { border-left: 4px solid var(--accent-2); background: rgba(88,166,255,0.05); }
+  .box.goal { border-left: 4px solid var(--accent-3); background: rgba(247,129,102,0.05); }
+  .box-title { font-weight: 600; margin-bottom: 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .tip .box-title { color: var(--accent); }
+  .warn .box-title { color: var(--warn); }
+  .danger .box-title { color: var(--error); }
+  .key .box-title { color: var(--accent-2); }
+  .goal .box-title { color: var(--accent-3); }
+  pre[class*="language-"] { background: var(--panel-2) !important; border: 1px solid var(--border); border-radius: 8px; margin: 14px 0; padding: 14px 18px; font-size: 14px; overflow-x: auto; }
+  pre code { font-size: inherit !important; }
+  .output {
+    background: #0a0d12; color: var(--success); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 16px; margin: 12px 0;
+    font-family: monospace; font-size: 13px; white-space: pre-wrap;
+    border-left: 3px solid var(--success); overflow-x: auto;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--panel); color: var(--accent); font-weight: 600; }
+  .quiz { background: #1f2937; border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; margin: 20px 0; }
+  .quiz .q-label { font-size: 11px; text-transform: uppercase; color: var(--accent); letter-spacing: 0.1em; margin-bottom: 6px; font-weight: 600; }
+  .quiz .q-text { font-weight: 500; margin-bottom: 12px; }
+  .quiz .options { list-style: none; padding: 0; margin: 0; }
+  .quiz .options li { padding: 8px 12px; margin: 6px 0; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; transition: all 0.15s; user-select: none; }
+  .quiz .options li:hover { border-color: var(--accent-2); }
+  .quiz .options li.correct { background: rgba(63,185,80,0.15); border-color: var(--success); color: var(--success); }
+  .quiz .options li.wrong { background: rgba(248,81,73,0.15); border-color: var(--error); color: var(--error); }
+  .quiz .options li.disabled { cursor: default; }
+  .quiz .options li .marker { font-weight: 600; margin-right: 8px; opacity: 0.7; }
+  .quiz .explanation { margin-top: 10px; padding: 10px 12px; background: var(--panel-2); border-left: 3px solid var(--accent-2); border-radius: 4px; font-size: 13px; display: none; }
+  .quiz.answered .explanation { display: block; }
+  .quiz .explanation b { color: var(--accent); }
+  .widget { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; margin: 18px 0; }
+  .widget-title { color: var(--accent); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
+  details { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 10px 16px; margin: 14px 0; }
+  details summary { cursor: pointer; font-weight: 500; color: var(--accent-2); padding: 4px 0; }
+  details[open] summary { margin-bottom: 6px; }
+  .filename {
+    display: inline-block; background: var(--panel-2); color: var(--accent);
+    padding: 2px 10px; border-radius: 4px; font-family: monospace;
+    font-size: 13px; margin: 6px 0; border: 1px solid var(--border);
+  }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; background: var(--panel); color: var(--text-dim); margin: 0 2px; border: 1px solid var(--border); }
+  .pill.new { color: var(--accent); border-color: var(--accent); background: rgba(118,185,0,0.1); }
+  .lead { font-size: 17px; color: var(--text); }
+  .cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 18px 0; }
+  .cmp > div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  .cmp h4 { margin-top: 0; }
+  .diagram { background: #0a0d12; border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin: 18px 0; text-align: center; }
+  .diagram svg { max-width: 100%; height: auto; }
+  .legend { font-size: 12px; color: var(--text-dim); margin-top: 8px; }
+  /* —— 交互组件专用 —— */
+  .viz { background: #0a0d12; border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin: 16px 0; }
+  .viz svg, .viz canvas { width: 100%; height: auto; display: block; }
+  .ctrls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 12px; }
+  .ctrls button, .ctrls select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 5px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+  .ctrls button.primary { background: var(--accent); color: var(--bg); border: none; font-weight: 600; }
+  .ctrls button:hover { border-color: var(--accent-2); }
+  .ctrls label { font-size: 12px; color: var(--text-dim); }
+  .status { font-family: monospace; font-size: 13px; color: var(--text); background: var(--panel-2); border-radius: 6px; padding: 6px 10px; margin: 6px 0; }
+  .bin { font-family: monospace; letter-spacing: 1px; }
+  .bin .on { color: var(--accent); font-weight: 700; }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
+  .stat-grid .s { background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; font-size: 13px; }
+  .stat-grid .s .big { font-size: 22px; font-weight: 700; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } nav.toc { display: none; } main { padding: 24px 20px 60px; } }
+  @media (max-width: 700px) { .cmp, .stat-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<header class="top">
+  <h1>Bitonic Sort <span class="v">· CUDA 可视化教程</span></h1>
+  <div class="meta">数据无关排序网络 · 适配 GPU</div>
+</header>
+
+<div class="layout">
+
+<nav class="toc" id="toc">
+  <h3>目录</h3>
+  <ul>
+    <li><a href="#intro">📍 为什么用 Bitonic</a></li>
+    <li><a href="#ch1"><span class="demo-num">1</span>双调序列与基本操作</a></li>
+    <li><a href="#ch2"><span class="demo-num">2</span>排序网络可视化</a></li>
+    <li><a href="#ch3"><span class="demo-num">3</span>下标的位运算</a></li>
+    <li><a href="#ch4"><span class="demo-num">4</span>CUDA 朴素实现</a></li>
+    <li><a href="#ch5"><span class="demo-num">5</span>共享内存优化</a></li>
+    <li><a href="#ch6"><span class="demo-num">6</span>性能与 profiling</a></li>
+    <li><a href="#ch7">✅ 检查清单 &amp; 参考</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<!-- ============== 导览 ============== -->
+<h1 class="demo" id="intro">📍 为什么 GPU 上要用 Bitonic Sort</h1>
+
+<p class="lead">这份教程用<strong>三个可交互组件</strong>把 bitonic sort 讲透：① 排序网络动画、② 下标位运算探索器、③ 共享内存分块图解，并衔接到你正在做的 CUDA 作业（朴素多 kernel → 共享内存双 kernel）。</p>
+
+<div class="box key">
+  <div class="box-title">核心动机：数据无关的排序网络</div>
+  Bitonic sort 是一个<strong>排序网络(sorting network)</strong>：要比较哪些下标、比较多少次，<strong>完全由 n 决定，与数据的值无关</strong>。这带来两个对 GPU 极友好的性质：
+  <ul class="lst" style="margin:8px 0 0;">
+    <li>同一个 sub-stage 里的 n/2 个比较<strong>彼此独立</strong> → 天然可并行；</li>
+    <li>没有依赖数据的分支去决定"下一步比谁" → 控制流规整，warp 发散小。</li>
+  </ul>
+</div>
+
+<p>对比作业背景里提到的<strong>朴素并行 mergesort</strong>：每轮归并活跃线程减半，最后一次归并几乎只剩极少线程在干活 —— 在 NSight 上你会看到后期 kernel 的 <strong>Achieved Occupancy 掉到个位数</strong>。而 bitonic sort 的<strong>每一个 sub-stage 都有 n/2 个比较同时进行</strong>，并行度自始至终保持饱满。代价是它做的比较更多（<code>O(n log²n)</code> 个比较 vs mergesort 的 <code>O(n log n)</code>），但在 GPU 上"规整且高并行"往往比"比较次数少但并行度差"跑得更快。</p>
+
+<div class="box warn">
+  <div class="box-title">前提</div>
+  经典 bitonic sort 只处理长度为 <strong>2 的幂</strong>的数组。非 2 的幂需要 padding（补到 2 的幂，填 +∞）或改用变体。
+</div>
+
+<div class="box goal">
+  <div class="box-title">🎯 学习路径</div>
+  双调序列与 split/merge（§1）→ <strong>网络动画看整体（§2）</strong> → <strong>位运算讲透下标（§3）</strong> → CUDA 朴素实现与痛点（§4）→ <strong>共享内存优化（§5）</strong> → 用 NSight 调 occupancy/throughput（§6）→ 实现检查清单（§7）。
+</div>
+
+<!-- ============== 第 1 章 ============== -->
+<h1 class="demo" id="ch1"><span class="num">1</span>双调序列与基本操作</h1>
+
+<h2>1.1 什么是双调序列 (Bitonic Sequence)</h2>
+<p>一个序列如果<strong>先单调递增、再单调递减</strong>（或先减后增，又或是这种序列的循环移位），就叫<strong>双调序列</strong>。例如 <code>[1, 4, 6, 8, 7, 5, 3, 2]</code> 就是先升后降。</p>
+<div class="diagram">
+<svg viewBox="0 0 420 150" xmlns="http://www.w3.org/2000/svg" font-family="monospace">
+  <polyline points="20,120 70,95 120,70 170,40 220,30 270,55 320,85 370,115" fill="none" stroke="#76b900" stroke-width="2"/>
+  <g fill="#58a6ff"><circle cx="20" cy="120" r="3"/><circle cx="70" cy="95" r="3"/><circle cx="120" cy="70" r="3"/><circle cx="170" cy="40" r="3"/><circle cx="220" cy="30" r="3"/><circle cx="270" cy="55" r="3"/><circle cx="320" cy="85" r="3"/><circle cx="370" cy="115" r="3"/></g>
+  <text x="120" y="140" text-anchor="middle" fill="#8b949e" font-size="11">↑ 递增</text>
+  <text x="300" y="140" text-anchor="middle" fill="#8b949e" font-size="11">递减 ↓</text>
+</svg>
+<div class="legend">双调序列：值先升后降（先降后升、或其循环移位也算）。</div>
+</div>
+
+<h2>1.2 双调拆分 (Bitonic Split)</h2>
+<p>对长度 n 的双调序列 <code>L = x₀ … x₍ₙ₋₁₎</code>，把前后两半逐位比较，拆成两个序列：</p>
+<div class="box key" style="font-family:monospace;font-size:14px;">
+  Lmin = min(x₀, x₍ₙ/₂₎), min(x₁, x₍ₙ/₂₊₁₎), … , min(x₍ₙ/₂₋₁₎, x₍ₙ₋₁₎)<br>
+  Lmax = max(x₀, x₍ₙ/₂₎), max(x₁, x₍ₙ/₂₊₁₎), … , max(x₍ₙ/₂₋₁₎, x₍ₙ₋₁₎)
+</div>
+<p>关键性质：<strong>Lmin 和 Lmax 各自仍是双调序列</strong>，并且 <strong>max(Lmin) ≤ min(Lmax)</strong> —— 也就是说 Lmin 里的每个数都不大于 Lmax 里的每个数。于是问题被一分为二：只要分别把 Lmin、Lmax 排好，拼起来就整体有序。</p>
+
+<h2>1.3 双调合并与排序 (Merge & Sort)</h2>
+<p>反复对拆分出来的子序列做 split，直到子序列长度变成 2，就得到一个完全有序的序列 —— 这就是<strong>双调合并</strong>：</p>
+<div class="box tip" style="font-family:monospace;font-size:14px;">
+  BM(n) = BS(n) + BS(n/2) + … + BS(2) = O(log n)
+</div>
+<p>而要从一个<strong>乱序</strong>数组开始，得先"造"出双调序列：从长度 2 的小段开始，交替按升序/降序排，拼成长度 4 的双调序列，再合并成有序的 4；如此倍增。整套下来：</p>
+<div class="box tip" style="font-family:monospace;font-size:14px;">
+  BitonicSort(n) = BM(2) + BM(4) + … + BM(n) = O(log²n) 个阶段
+</div>
+<p>每个阶段对 n 个元素做 n/2 次比较，所以总比较数约 <code>(n/2)·log²n = O(n log²n)</code>。下一节用动画把这整个过程跑给你看。</p>
+
+<div class="quiz" data-correct="2">
+  <div class="q-label">Quiz · 为什么适合 GPU</div>
+  <div class="q-text">为什么说 bitonic sort 比"朴素并行 mergesort"更适合 GPU？</div>
+  <ul class="options">
+    <li data-i="0"><span class="marker">A.</span>因为它的总比较次数更少</li>
+    <li data-i="1"><span class="marker">B.</span>因为它能排序任意长度的数组</li>
+    <li data-i="2"><span class="marker">C.</span>它是数据无关的排序网络，每个 sub-stage 有 n/2 个独立比较、并行度始终饱满、控制流规整</li>
+    <li data-i="3"><span class="marker">D.</span>因为它完全不需要任何同步</li>
+  </ul>
+  <div class="explanation">
+    <b>C</b>。优势在<b>规整的高并行</b>：比较序列与数据无关，每个 sub-stage 都是 n/2 个独立比较。它的比较次数其实<b>更多</b>（O(n log²n)，A 错）；只能处理 2 的幂（B 错）；sub-stage 之间仍需<b>同步</b>（D 错，这正是后面多次 kernel launch 的原因）。
+  </div>
+</div>
+
+<!-- ============== 第 2 章 排序网络动画 ============== -->
+<h1 class="demo" id="ch2"><span class="num">2</span>排序网络可视化</h1>
+<p>下面这个组件把整套 bitonic sort 跑给你看。数组是 <code>1…n</code> 的随机排列（柱高 = 值），<strong>排好序就是柱子从矮到高（升序）</strong>。每一步执行一个 <strong>sub-stage</strong>：上方的弧线表示这一步要比较的<strong>配对</strong>，🟢 绿弧 = 这对按升序比较、🟠 橙弧 = 按降序比较（方向由下一节的 <code>bit i</code> 决定）。</p>
+
+<div class="viz">
+  <div class="ctrls">
+    <button class="primary" id="bnPlay">▶ 播放</button>
+    <button id="bnStep">单步 ▶|</button>
+    <button id="bnReset">↺ 重置</button>
+    <button id="bnShuf">🔀 随机</button>
+    <label>n <select id="bnN"><option>8</option><option>16</option></select></label>
+    <label>速度 <input type="range" id="bnSpd" min="1" max="10" value="5" style="width:90px;vertical-align:middle"></label>
+  </div>
+  <div class="status" id="bnStatus"></div>
+  <canvas id="bnCanvas" width="880" height="300"></canvas>
+  <div class="status" id="bnDone" style="color:var(--success);display:none">✓ 已排成升序</div>
+</div>
+
+<div class="box tip">
+  <div class="box-title">怎么看</div>
+  注意每个 sub-stage 的<strong>所有弧线步长一致</strong>（都是 2^j）—— 这就是"一个 kernel 处理一种步长"。前几个阶段在<strong>造</strong>双调序列（绿橙交替分块），后面的阶段把它们<strong>合并</strong>成整体有序。点"单步"逐步看，或"播放"看全程。
+</div>
+
+<!-- ============== 第 3 章 下标位运算 ============== -->
+<h1 class="demo" id="ch3"><span class="num">3</span>下标的位运算</h1>
+<p>上一节动画里"谁和谁比、按升还是降"全靠两个位运算决定。这正是作业伪码的核心：</p>
+<pre><code class="language-c">for (i = 1; i &lt;= log2(n); i++)            // 阶段：构造长度 2^i 的有序段
+  for (j = i-1; j &gt;= 0; j--)              // sub-stage：步长 2^j
+    for (k = 0; k &lt; n; k++) {             // 遍历数组
+      l = k XOR (1&lt;&lt;j);                    // ① 配对下标
+      if (l &gt; k) {                         // 只处理较小的一端，避免重复比较
+        if ((k &amp; (1&lt;&lt;i)) == 0)             // ② 方向：bit i 为 0 → 升序
+          compare_exchange_ascending(k, l);
+        else
+          compare_exchange_descending(k, l);
+      }
+    }</code></pre>
+<ul class="lst">
+  <li><strong>① 配对：<code>partner = k XOR 2^j</code></strong> —— XOR 把下标的第 j 位翻转，等价于"跨步 2^j 找对象"。例：BM(8) 的 j=2(步长4)，<code>0↔4, 1↔5, 2↔6, 3↔7</code>。</li>
+  <li><strong>② 方向：<code>k &amp; 2^i</code></strong> —— 看下标的第 i 位。为 0 的那批（"偶块"）按升序、为 1 的（"奇块"）按降序，于是每 2^i 个元素拼成一个长度 2^{i+1} 的双调序列，供下一阶段用。</li>
+</ul>
+
+<p>下面探索器把它具体化：选 <code>i / j</code> 看所有比较对（弧线按方向着色），<strong>点任一下标</strong>看它的二进制配对分解。</p>
+<div class="viz">
+  <div class="ctrls">
+    <label>n <select id="ixN"><option>8</option><option>16</option></select></label>
+    <label>stage i <select id="ixI"></select></label>
+    <label>sub-stage j <select id="ixJ"></select></label>
+    <span class="legend" style="margin-left:6px;">🟢 升序对 · 🟠 降序对</span>
+  </div>
+  <svg id="ixSvg" viewBox="0 0 880 170" xmlns="http://www.w3.org/2000/svg"></svg>
+  <div class="status" id="ixInfo">点击任一下标方块，看它的二进制配对分解</div>
+</div>
+
+<div class="quiz" data-correct="1">
+  <div class="q-label">Quiz · 下标位运算</div>
+  <div class="q-text">设 n=8，处于 stage <code>i=3</code>、sub-stage <code>j=2</code>。下标 <code>k=1</code> 会和谁比较、按什么方向？</div>
+  <ul class="options">
+    <li data-i="0"><span class="marker">A.</span>与 3 比较，降序</li>
+    <li data-i="1"><span class="marker">B.</span>与 5 比较，升序</li>
+    <li data-i="2"><span class="marker">C.</span>与 5 比较，降序</li>
+    <li data-i="3"><span class="marker">D.</span>与 2 比较，升序</li>
+  </ul>
+  <div class="explanation">
+    <b>B</b>。配对 = <code>1 XOR 2^2 = 1 XOR 4 = 5</code>；方向看 <code>1 &amp; 2^3 = 1 &amp; 8 = 0</code> → <b>升序 ↑</b>。可在上面探索器选 i=3、j=2，点下标 1 验证。
+  </div>
+</div>
+
+<!-- ============== 第 4 章 CUDA 朴素实现 ============== -->
+<h1 class="demo" id="ch4"><span class="num">4</span>CUDA 朴素实现</h1>
+<p>把伪码直译成 CUDA：用 <code>&lt;&lt;&lt;blocks, threads&gt;&gt;&gt;</code> 启动一大批线程，<strong>一个线程负责一个下标 k</strong> 的比较交换。</p>
+
+<div class="filename">bitonic_naive.cu</div>
+<pre><code class="language-c">// 一个 sub-stage 一个 kernel：每个线程处理下标 k
+__global__ void bitonicStep(int* a, int n, int i, int j) {
+    int k = blockIdx.x * blockDim.x + threadIdx.x;   // 全局线程 = 下标
+    if (k >= n) return;
+    int l = k ^ (1 << j);                            // ① 配对
+    if (l > k) {                                     // 只让较小端比较，避免重复
+        bool up = ((k & (1 << i)) == 0);             // ② 方向
+        if (up ? (a[k] > a[l]) : (a[k] < a[l])) {    // compare-exchange
+            int t = a[k]; a[k] = a[l]; a[l] = t;
+        }
+    }
+}
+
+// host 端：双重循环，每个 (i,j) 启动一次 kernel
+int threads = 256, blocks = (n + threads - 1) / threads;
+for (int i = 1; i <= log2n; i++)
+    for (int j = i - 1; j >= 0; j--)
+        bitonicStep<<<blocks, threads>>>(d_a, n, i, j);   // ← 一次 launch</code></pre>
+
+<div class="box key">
+  <div class="box-title">为什么必须启动这么多次 kernel？</div>
+  sub-stage 之间有<strong>依赖</strong>：步长 2^j 这一步必须等步长 2^{j+1} 全部写完才能开始。但 CUDA <strong>没有跨 block 的全局 barrier</strong> —— <code>__syncthreads()</code> 只能同步<strong>一个 block 内</strong>的线程。要让<strong>所有</strong>线程在两个 sub-stage 之间对齐，唯一办法就是<strong>结束当前 kernel、再启动下一个</strong>：kernel 边界 = 一次全局同步。
+</div>
+
+<div class="box warn">
+  <div class="box-title">朴素版的痛点（NSight 会点名）</div>
+  <ul class="lst" style="margin:6px 0;">
+    <li><strong>kernel launch 次数 = O(log²n)</strong>：n=100M 时 log₂n≈27 → 约 <code>27·28/2 = 378</code> 次 launch，开销累积。</li>
+    <li><strong>每次 launch 只做一次比较</strong>就把整个数组<strong>读一遍写一遍 global memory</strong> → 算术强度极低、<strong>memory-bound</strong>。</li>
+    <li>NSight 会提示 "<em>low compute throughput and memory bandwidth utilization</em>"。</li>
+  </ul>
+  注意：朴素 bitonic 的 <strong>occupancy 其实不低</strong>（每步约 n/2 线程活跃）；真正的瓶颈是<strong>反复的全局内存往返</strong>和 launch 次数 —— 这正是下一节共享内存优化要解决的。
+</div>
+
+<div class="quiz" data-correct="0">
+  <div class="q-label">Quiz · CUDA 朴素实现</div>
+  <div class="q-text">朴素实现为什么要把每个 sub-stage 拆成<strong>单独的 kernel launch</strong>？</div>
+  <ul class="options">
+    <li data-i="0"><span class="marker">A.</span>因为 sub-stage 间需要全局同步，而 CUDA 跨 block 的全局 barrier 只能靠"结束并重启 kernel"实现</li>
+    <li data-i="1"><span class="marker">B.</span>因为一个 kernel 最多只能用一个线程</li>
+    <li data-i="2"><span class="marker">C.</span>因为 GPU 不支持循环</li>
+    <li data-i="3"><span class="marker">D.</span>这样可以减少全局内存访问</li>
+  </ul>
+  <div class="explanation">
+    <b>A</b>。<code>__syncthreads()</code> 只同步单个 block；要让所有 block 对齐到下一 sub-stage，只能用 kernel 边界做全局同步。这反而<b>增加</b>了 global 访问与 launch 开销（D 正好说反了）。
+  </div>
+</div>
+
+<!-- ============== 第 5 章 共享内存优化 ============== -->
+<h1 class="demo" id="ch5"><span class="num">5</span>共享内存优化</h1>
+<p>朴素版的病根：每个小 sub-stage 都单独 launch、都把整个数组在 global memory 里读写一遍。<strong>关键观察</strong>：当步长 <code>2^j</code> 小到一对元素都落在<strong>同一个 block 的 tile（T 个元素）</strong>内时，这一串连续的小步长 sub-stage 完全可以在 <strong>shared memory</strong> 里连做 —— 加载一次、用 <code>__syncthreads()</code> 在块内同步、做完再写回一次。</p>
+
+<div class="box key">
+  <div class="box-title">把 kernel 拆成两个</div>
+  <ul class="lst" style="margin:6px 0;">
+    <li><strong>shared kernel</strong>：处理步长 &lt; tile 的<strong>一串</strong>小 sub-stage —— 一次 global 读 + 块内多步 + 一次 global 写。</li>
+    <li><strong>global kernel</strong>：处理步长 ≥ tile 的大 sub-stage（配对元素在别的 block，必须走 global）。</li>
+  </ul>
+</div>
+
+<div class="filename">bitonic_shared.cu（策略级，简化为每线程 1 元素）</div>
+<pre><code class="language-c">// shared kernel：把块内一串小步长 (jStart..0) 一次性做完
+__global__ void bitonicShared(int* a, int n, int i, int jStart) {
+    extern __shared__ int s[];
+    int t = threadIdx.x, base = blockIdx.x * blockDim.x;
+    s[t] = a[base + t];          // ① 协作加载一次（合并访问）
+    __syncthreads();
+    for (int j = jStart; j >= 0; j--) {     // ② 块内连做，不重启 kernel
+        int l = t ^ (1 << j);
+        if (l > t) {
+            bool up = (((base + t) & (1 << i)) == 0);
+            if (up ? (s[t] > s[l]) : (s[t] < s[l])) { int tmp=s[t]; s[t]=s[l]; s[l]=tmp; }
+        }
+        __syncthreads();          // 块内同步即可，无需 kernel 边界
+    }
+    a[base + t] = s[t];           // ③ 写回一次
+}
+
+// host：大步长走 global kernel，步长一旦落入 tile 内就交给 shared kernel 收尾
+for (int i = 1; i <= log2n; i++) {
+    for (int j = i - 1; j >= 0; j--) {
+        if ((1 << j) >= TILE)                       // 跨 block
+            bitonicGlobal<<<blocks, threads>>>(d_a, n, i, j);
+        else {                                      // 步长 < tile：一次 shared kernel 收尾
+            bitonicShared<<<blocks, threads, TILE*sizeof(int)>>>(d_a, n, i, j);
+            break;                                  // 这一串小步长已在块内做完
+        }
+    }
+}</code></pre>
+
+<div class="box tip">
+  <div class="box-title">还要注意</div>
+  <strong>合并访问 (coalescing)</strong>：加载/写回时让相邻线程访问相邻地址，吃满带宽（冲 ≥75% throughput 的关键）。<strong>Bank conflict</strong>：shared memory 分 32 个 bank，注意访问步长避免多个线程撞同一 bank。实战常让<strong>每线程处理 2 个元素</strong>把 tile 扩到 2·blockDim，进一步减少 launch。
+</div>
+
+<p>下面图解：调 n 与 tile，看哪些 sub-stage 能进 shared memory（🟢），以及 launch 次数怎么从朴素降下来：</p>
+<div class="viz">
+  <div class="ctrls">
+    <label>数组 n = 2^<select id="shN"></select></label>
+    <label>每块 tile = 2^<select id="shT"></select></label>
+    <span class="legend" style="margin-left:6px;">🟢 块内(shared) · 🟠 跨块(global)</span>
+  </div>
+  <div id="shGrid" style="line-height:1.8"></div>
+  <div class="stat-grid">
+    <div class="s"><div>朴素：kernel launches</div><div class="big" id="shNaive">–</div></div>
+    <div class="s"><div>优化后：kernel launches</div><div class="big" id="shOpt" style="color:var(--accent)">–</div></div>
+  </div>
+  <div class="status" id="shNote"></div>
+</div>
+
+<div class="quiz" data-correct="1">
+  <div class="q-label">Quiz · 共享内存优化</div>
+  <div class="q-text">为什么用 shared memory 能<strong>同时</strong>减少 global 访问<strong>和</strong> kernel launch 次数？</div>
+  <ul class="options">
+    <li data-i="0"><span class="marker">A.</span>因为 shared memory 容量比 global memory 大</li>
+    <li data-i="1"><span class="marker">B.</span>把一串小步长 sub-stage 在 block 内用 __syncthreads() 连做：数据只从 global 读一次写一次，且块内同步无需重启 kernel</li>
+    <li data-i="2"><span class="marker">C.</span>因为 shared memory 完全不需要同步</li>
+    <li data-i="3"><span class="marker">D.</span>因为它把排序交给了 CPU</li>
+  </ul>
+  <div class="explanation">
+    <b>B</b>。一次加载进 shared，块内连做多个小步长（靠 <code>__syncthreads()</code> 同步，不必结束 kernel），最后写回一次 —— 既省了反复的 global 往返，又把多次 launch 合并成一次。shared memory 其实<b>更小</b>（A 错），块内仍需同步（C 错）。
+  </div>
+</div>
+
+<!-- ============== 第 6 章 性能与 profiling ============== -->
+<h1 class="demo" id="ch6"><span class="num">6</span>性能与 profiling</h1>
+<p>作业用 NSight Compute (<code>ncu</code>) 卡两个硬指标，先搞清它们的含义：</p>
+
+<h2>6.1 关键指标</h2>
+<table>
+  <thead><tr><th>指标</th><th>含义</th><th>作业目标</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Achieved Occupancy</strong></td><td>每个 SM 上<strong>活跃 warp 数</strong>占理论峰值的百分比，反映并行度是否填满</td><td>≥ 65%</td></tr>
+    <tr><td><strong>Memory Throughput</strong></td><td>占<strong>峰值显存带宽</strong>的百分比。bitonic 是 memory-bound，这个越高越好</td><td>≥ 75%</td></tr>
+    <tr><td><strong>Warp Divergence</strong></td><td>warp 内线程因分支走不同路径而串行化的程度；越低越好</td><td>越低越好</td></tr>
+    <tr><td><strong>meps</strong></td><td>每秒处理的百万元素数 = n / 总时间</td><td>≥ 1000（H100, 100M）</td></tr>
+  </tbody>
+</table>
+
+<h2>6.2 怎么用 ncu 取数</h2>
+<pre><code class="language-bash"># Achieved Occupancy
+ncu --metrics sm__warps_active.avg.pct_of_peak_sustained_active \
+    --print-summary per-gpu ./a.out 10000000
+
+# Memory Throughput
+ncu --metrics gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed \
+    --print-summary per-gpu ./a.out 10000000
+
+# 还可看：global/local 访问、分支发散
+ncu --metrics l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum,\
+smsp__thread_inst_executed_per_inst_executed.ratio ./a.out 10000000</code></pre>
+<div class="box tip">
+  <div class="box-title">调优直觉</div>
+  bitonic 是 <strong>memory-bound</strong>：先保证<strong>合并访问</strong>把 throughput 顶上 75%+；occupancy 不够就调 block 大小 / 每线程元素数；shared kernel 把多步合并能同时改善两者。多个 kernel 时作业取<strong>平均</strong>。
+</div>
+
+<div class="quiz" data-correct="1">
+  <div class="q-label">Quiz · 性能指标</div>
+  <div class="q-text">"Achieved Occupancy" 衡量的是什么？</div>
+  <ul class="options">
+    <li data-i="0"><span class="marker">A.</span>kernel 运行了多少毫秒</li>
+    <li data-i="1"><span class="marker">B.</span>每个 SM 上活跃 warp 数占理论峰值 warp 数的比例</li>
+    <li data-i="2"><span class="marker">C.</span>用了多少 GB 显存</li>
+    <li data-i="3"><span class="marker">D.</span>host 与 device 之间的数据传输速度</li>
+  </ul>
+  <div class="explanation">
+    <b>B</b>。Occupancy = 实际活跃 warp / 理论最大 warp（占峰值百分比），反映 SM 的并行度被填满的程度。它<b>不是</b>时间、显存用量或传输速度。朴素 mergesort 后期因活跃线程锐减导致 occupancy 崩塌，正是本教程开篇的对比点。
+  </div>
+</div>
+
+<!-- ============== 第 7 章 检查清单与参考 ============== -->
+<h1 class="demo" id="ch7">✅ 实现检查清单 &amp; 参考</h1>
+<h2>7.1 推荐实现顺序</h2>
+<ol class="lst">
+  <li>先写<strong>朴素版</strong>（§4），用小数组(2K–10M)跑通<strong>正确性</strong>，确认打印 "FUNCTIONAL SUCCESS"。</li>
+  <li>加 <strong>shared kernel</strong>（§5）：把步长 &lt; tile 的小 sub-stage 在块内连做，拆成 shared + global 两个 kernel。</li>
+  <li>用 <strong>ncu</strong>（§6）量 occupancy / throughput，调 block 大小、每线程元素数、合并访问，冲 1000 meps。</li>
+</ol>
+<h2>7.2 踩坑清单</h2>
+<div class="box warn">
+  <div class="box-title">别在这些地方丢分</div>
+  <ul class="lst" style="margin:6px 0;">
+    <li>100M 规模注意用 <strong><code>size_t</code></strong> 算字节偏移/尺寸，避免 <code>int</code> 溢出；检查 grid 维度上限。</li>
+    <li><strong>所有 GPU 相关操作必须在 <code>main.cu</code> 的计时段内</strong>；禁止：CPU 做 merge、多线程 host、计时外执行 GPU 代码、static/global 预分配数据结构、人为串行化。违规可能整项目 0 分。</li>
+    <li>在 PACE-ICE 上<strong>显式选 H100</strong>；用 <code>grade.py</code> 本地自测；提交 <code>report.pdf</code> + <code>submission.zip</code>（勿打包成一个 zip）。</li>
+    <li>报告 2–3 页、11pt Times/Arial，讨论实现与各项优化的<strong>效果</strong>（贴 ncu 数字最有说服力）。</li>
+  </ul>
+</div>
+<h2>7.3 参考</h2>
+<ul class="lst">
+  <li>Bitonic Sort 图解：<a href="https://hwlang.de/algorithmen/sortieren/bitonic/bitonicen.htm" target="_blank">hwlang.de</a></li>
+  <li>Comparator networks：Prof. Vuduc 讲义 item 23–28</li>
+  <li><a href="https://docs.nvidia.com/cuda/" target="_blank">NVIDIA CUDA 文档</a> · NSight Compute 指标说明（<code>ncu --query-metrics</code>）</li>
+  <li>并行计算基础概念可参考同目录的 <code>parallel-computing-tutorial.html</code>（数据依赖 / 同步 / 粒度）</li>
+</ul>
+<div class="box goal">
+  <div class="box-title">🎉 收尾</div>
+  你已经把 bitonic sort 从<strong>网络结构</strong>、<strong>下标位运算</strong>，到 <strong>CUDA 朴素实现的痛点</strong>与<strong>共享内存优化</strong>、再到 <strong>NSight 调优目标</strong>全过了一遍。回到 §2 动画与 §3 探索器多拨几次，把 <code>k^(1&lt;&lt;j)</code> 和 <code>k&amp;(1&lt;&lt;i)</code> 的手感坐实，然后开写 <code>bitonic.cu</code>。
+</div>
+
+</main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script>
+// —— 阅读进度条 ——
+function updateProgress() {
+  const h = document.documentElement;
+  const pct = (h.scrollTop / (h.scrollHeight - h.clientHeight)) * 100;
+  document.getElementById('progress').style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress);
+
+// —— TOC 高亮（基于 h1.demo）——
+function highlightToc() {
+  const headings = document.querySelectorAll('h1.demo');
+  let active = null;
+  for (const h of headings) { if (h.getBoundingClientRect().top < 120) active = h; }
+  if (!active) return;
+  document.querySelectorAll('nav.toc a').forEach(a => a.classList.remove('active'));
+  const a = document.querySelector(`nav.toc a[href="#${active.id}"]`);
+  if (a) a.classList.add('active');
+}
+window.addEventListener('scroll', highlightToc);
+
+// —— 随堂测验：点击判分 + 展开解析 ——
+document.querySelectorAll('.quiz').forEach(quiz => {
+  const correct = parseInt(quiz.dataset.correct, 10);
+  quiz.querySelectorAll('.options li').forEach(li => {
+    li.addEventListener('click', () => {
+      if (quiz.classList.contains('answered')) return;
+      const i = parseInt(li.dataset.i, 10);
+      quiz.classList.add('answered');
+      quiz.querySelectorAll('.options li').forEach(x => x.classList.add('disabled'));
+      if (i === correct) li.classList.add('correct');
+      else {
+        li.classList.add('wrong');
+        const c = quiz.querySelector(`.options li[data-i="${correct}"]`);
+        if (c) c.classList.add('correct');
+      }
+    });
+  });
+});
+
+// ===== 算法核心（组件①③共用，严格按作业伪码）=====
+function stages(n){
+  var L = Math.round(Math.log2(n)), seq = [];
+  for (var i=1; i<=L; i++) for (var j=i-1; j>=0; j--) seq.push({i:i, j:j});
+  return seq;
+}
+function applySubstage(a, i, j){
+  var n=a.length, dist=1<<j;
+  for (var k=0;k<n;k++){
+    var l = k ^ dist;
+    if (l > k){
+      var up = (k & (1<<i)) === 0;
+      if (up ? (a[k] > a[l]) : (a[k] < a[l])){ var t=a[k]; a[k]=a[l]; a[l]=t; }
+    }
+  }
+}
+
+/* === 组件①：排序网络动画 === */
+(function(){
+  var cv=document.getElementById('bnCanvas'); if(!cv||!cv.getContext) return;
+  var ctx=cv.getContext('2d'), W=cv.width, H=cv.height;
+  var n=8, arr=[], initial=[], seq=[], ptr=0, playing=false, timer=null;
+  var elPlay=document.getElementById('bnPlay'), elStep=document.getElementById('bnStep'),
+      elReset=document.getElementById('bnReset'), elShuf=document.getElementById('bnShuf'),
+      elN=document.getElementById('bnN'), elSpd=document.getElementById('bnSpd'),
+      elStatus=document.getElementById('bnStatus'), elDone=document.getElementById('bnDone');
+
+  function makeArr(){
+    arr=[]; for(var i=0;i<n;i++) arr.push(i+1);
+    for(var i=n-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=arr[i];arr[i]=arr[j];arr[j]=t; }
+    initial=arr.slice(); seq=stages(n); ptr=0;
+  }
+  function stop(){ playing=false; if(timer){clearInterval(timer);timer=null;} elPlay.textContent='▶ 播放'; }
+  function reset(){ stop(); arr=initial.slice(); ptr=0; render(); }
+
+  function render(){
+    ctx.clearRect(0,0,W,H);
+    var padX=24, baseY=H-34, padTop=72, maxH=baseY-padTop, bw=(W-2*padX)/n, maxV=n;
+    var cur = ptr<seq.length ? seq[ptr] : null, dist = cur ? (1<<cur.j) : 0;
+    function cx(k){ return padX + k*bw + bw/2; }
+    function dirUp(k){ var lo=Math.min(k,k^dist); return (lo & (1<<cur.i))===0; }
+    if(cur){
+      for(var k=0;k<n;k++){ var l=k^dist; if(l>k){
+        var up=dirUp(k), x1=cx(k), x2=cx(l);
+        ctx.strokeStyle = up ? 'rgba(118,185,0,0.65)' : 'rgba(247,129,102,0.65)';
+        ctx.lineWidth=2; ctx.beginPath();
+        var peak = 60 - Math.min(46, 8 + (x2-x1)*0.16);
+        ctx.moveTo(x1,62); ctx.quadraticCurveTo((x1+x2)/2, peak, x2,62); ctx.stroke();
+      }}
+    }
+    for(var k=0;k<n;k++){
+      var v=arr[k], bh=Math.max(8, v/maxV*maxH), x=padX+k*bw+3, y=baseY-bh, w=bw-6;
+      ctx.fillStyle = cur ? '#1f6feb' : '#2ea043';
+      ctx.fillRect(x,y,w,bh);
+      ctx.textAlign='center';
+      ctx.fillStyle='#fff'; ctx.font='bold 12px monospace';
+      ctx.fillText(v, x+w/2, (y-4)<padTop ? y+14 : y-4);
+      ctx.fillStyle='#8b949e'; ctx.font='10px monospace';
+      ctx.fillText(k, x+w/2, baseY+16);
+    }
+    if(cur){
+      elStatus.innerHTML='步 '+(ptr+1)+'/'+seq.length+' · 阶段 BM(2^'+cur.i+') · sub-stage 步长 2^'+cur.j+' = '+dist+' · 方向按 bit '+cur.i+'（🟢升序对 / 🟠降序对）';
+      elDone.style.display='none';
+    } else {
+      elStatus.innerHTML='完成：共执行 '+seq.length+' 个 sub-stage（= log₂n·(log₂n+1)/2）';
+      elDone.style.display='';
+    }
+  }
+  function stepOnce(){ if(ptr>=seq.length){ stop(); return; } var s=seq[ptr]; applySubstage(arr,s.i,s.j); ptr++; render(); if(ptr>=seq.length) stop(); }
+  function play(){ if(playing){ stop(); return; } if(ptr>=seq.length) reset(); playing=true; elPlay.textContent='⏸ 暂停'; timer=setInterval(stepOnce, 1100-(+elSpd.value)*100); }
+
+  elPlay.onclick=play;
+  elStep.onclick=function(){ stop(); stepOnce(); };
+  elReset.onclick=reset;
+  elShuf.onclick=function(){ stop(); makeArr(); render(); };
+  elN.onchange=function(){ n=+elN.value; stop(); makeArr(); render(); };
+  elSpd.oninput=function(){ if(playing){ clearInterval(timer); timer=setInterval(stepOnce, 1100-(+elSpd.value)*100); } };
+  makeArr(); render();
+})();
+
+/* === 组件②：下标位运算探索器 === */
+(function(){
+  var svg=document.getElementById('ixSvg'); if(!svg) return;
+  var elN=document.getElementById('ixN'), elI=document.getElementById('ixI'), elJ=document.getElementById('ixJ'), info=document.getElementById('ixInfo');
+  var n=8, selK=-1;
+  function L(){ return Math.round(Math.log2(n)); }
+  function fillI(){ elI.innerHTML=''; for(var i=1;i<=L();i++) elI.innerHTML+='<option>'+i+'</option>'; elI.value=L(); }
+  function fillJ(){ var i=+elI.value; elJ.innerHTML=''; for(var j=i-1;j>=0;j--) elJ.innerHTML+='<option>'+j+'</option>'; elJ.value=i-1; }
+  function bin(x){ return (x>>>0).toString(2).padStart(L(),'0'); }
+  function render(){
+    var pad=20, bw=(880-2*pad)/n, top=100, h=36;
+    var i=+elI.value, j=+elJ.value, dist=1<<j, s='';
+    for(var k=0;k<n;k++){ var l=k^dist; if(l>k){
+      var up=((Math.min(k,l)&(1<<i))===0);
+      var x1=pad+k*bw+bw/2, x2=pad+l*bw+bw/2;
+      var peak=top-8-Math.min(72,(x2-x1)*0.16+8);
+      s+='<path d="M'+x1+' '+top+' Q'+((x1+x2)/2)+' '+peak+' '+x2+' '+top+'" fill="none" stroke="'+(up?'#76b900':'#f78166')+'" stroke-width="2" opacity="0.7"/>';
+    }}
+    for(var k=0;k<n;k++){
+      var x=pad+k*bw+2, w=bw-4, partner=(selK>=0)?(selK^dist):-1;
+      var fill = k===selK ? '#1f6feb' : (k===partner ? '#243b53' : '#161b22');
+      var stroke = (k===selK||k===partner) ? '#58a6ff' : '#30363d';
+      s+='<rect x="'+x+'" y="'+top+'" width="'+w+'" height="'+h+'" rx="4" fill="'+fill+'" stroke="'+stroke+'" stroke-width="1.5" style="cursor:pointer" data-k="'+k+'"/>';
+      s+='<text x="'+(x+w/2)+'" y="'+(top+23)+'" text-anchor="middle" fill="#c9d1d9" font-family="monospace" font-size="13" style="pointer-events:none">'+k+'</text>';
+    }
+    svg.innerHTML=s;
+    svg.querySelectorAll('rect[data-k]').forEach(function(r){ r.addEventListener('click',function(){ selK=+r.getAttribute('data-k'); render(); showInfo(); }); });
+  }
+  function showInfo(){
+    if(selK<0){ info.textContent='点击任一下标方块，看它的二进制配对分解'; return; }
+    var i=+elI.value, j=+elJ.value, dist=1<<j, k=selK, l=k^dist, lo=Math.min(k,l), up=((lo&(1<<i))===0);
+    info.innerHTML='<span class="bin">k = '+k+' = '+bin(k)+'</span>　partner = k XOR 2^'+j+' = '+k+' XOR '+dist+' = <b>'+l+'</b> (<span class="bin">'+bin(l)+'</span>)　|　方向看较小端 '+lo+' 的 bit '+i+'：'+lo+' &amp; '+(1<<i)+' = '+(lo&(1<<i))+' → <b style="color:'+(up?'#76b900':'#f78166')+'">'+(up?'升序 ↑':'降序 ↓')+'</b>';
+  }
+  elN.onchange=function(){ n=+elN.value; selK=-1; fillI(); fillJ(); render(); showInfo(); };
+  elI.onchange=function(){ fillJ(); selK=-1; render(); showInfo(); };
+  elJ.onchange=function(){ selK=-1; render(); showInfo(); };
+  fillI(); fillJ(); render();
+})();
+
+/* === 组件③：共享内存分块图解 === */
+(function(){
+  var shN=document.getElementById('shN'), shT=document.getElementById('shT');
+  if(!shN) return;
+  var grid=document.getElementById('shGrid'), naiveEl=document.getElementById('shNaive'),
+      optEl=document.getElementById('shOpt'), note=document.getElementById('shNote');
+  for(var e=8;e<=20;e+=2) shN.innerHTML+='<option>'+e+'</option>';
+  for(var e=4;e<=14;e++) shT.innerHTML+='<option>'+e+'</option>';
+  shN.value='20'; shT.value='11';
+  function render(){
+    var Ln=+shN.value, Lt=+shT.value, n=Math.pow(2,Ln), T=Math.pow(2,Lt);
+    var seq=stages(n), html='';
+    for(var i=1;i<=Ln;i++){
+      html+='<div><span style="color:#8b949e;font-family:monospace;font-size:12px;min-width:74px;display:inline-block">BM(2^'+i+')</span> ';
+      for(var j=i-1;j>=0;j--){
+        var inB=(1<<j)<T;
+        html+='<span title="步长 2^'+j+'='+(1<<j)+'" style="display:inline-block;min-width:26px;text-align:center;margin:2px;padding:1px 4px;border-radius:4px;font-family:monospace;font-size:11px;background:'+(inB?'rgba(118,185,0,0.18)':'rgba(247,129,102,0.18)')+';border:1px solid '+(inB?'#76b900':'#f78166')+';color:'+(inB?'#76b900':'#f78166')+'">j'+j+'</span>';
+      }
+      html+='</div>';
+    }
+    grid.innerHTML=html;
+    var naive=seq.length, opt=0, run=false;
+    seq.forEach(function(s){ var inB=(1<<s.j)<T; if(inB){ if(!run){opt++;run=true;} } else { opt++; run=false; } });
+    naiveEl.textContent=naive;
+    optEl.textContent=opt;
+    note.innerHTML='n=2^'+Ln+'='+n.toLocaleString()+'，tile=2^'+Lt+'='+T.toLocaleString()+' 元素/块。🟢 步长 &lt; tile → 块内 shared memory 连做（每段连续绿色合并为 <b>1 次</b> shared kernel）；🟠 步长 ≥ tile → 跨 block，需 global kernel。launch：朴素 <b>'+naive+'</b> → 优化 <b style="color:var(--accent)">'+opt+'</b>（约省 '+Math.round((1-opt/naive)*100)+'%；直观计数模型）。';
+  }
+  shN.onchange=render; shT.onchange=render;
+  render();
+})();
+</script>
+</body>
+</html>

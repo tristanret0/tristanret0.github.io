@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Tutorials</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0f172a;
+      --panel: #111827;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --accent: #38bdf8;
+      --border: #273244;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      line-height: 1.65;
+    }
+
+    main {
+      width: min(920px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 56px 0;
+    }
+
+    header {
+      margin-bottom: 32px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(2rem, 6vw, 3.5rem);
+      letter-spacing: 0;
+      line-height: 1.08;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 1rem;
+    }
+
+    .list {
+      display: grid;
+      gap: 14px;
+      margin-top: 24px;
+    }
+
+    a.article {
+      display: block;
+      padding: 18px 20px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      color: inherit;
+      text-decoration: none;
+    }
+
+    a.article:hover,
+    a.article:focus-visible {
+      border-color: var(--accent);
+      outline: none;
+    }
+
+    .article-title {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--text);
+      font-size: 1.15rem;
+      font-weight: 700;
+    }
+
+    .article-meta {
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>AI Tutorials</h1>
+      <p>个人教程归档，托管在 GitHub Pages。</p>
+    </header>
+
+    <section class="list" aria-label="教程列表">
+      <a class="article" href="bitonic-sort-tutorial.html">
+        <span class="article-title">Bitonic Sort · CUDA 交互式教程</span>
+        <span class="article-meta">GPU / CUDA / Parallel Sorting</span>
+      </a>
+    </section>
+  </main>
+</body>
+</html>
