@@ -161,15 +161,18 @@
 <p class="lead">这份教程用<strong>三个可交互组件</strong>把 bitonic sort 讲透：① 排序网络动画、② 下标位运算探索器、③ 共享内存分块图解，并衔接到你正在做的 CUDA 作业（朴素多 kernel → 共享内存双 kernel）。</p>
 
 <div class="box key">
-  <div class="box-title">核心动机：数据无关的排序网络</div>
-  Bitonic sort 是一个<strong>排序网络(sorting network)</strong>：要比较哪些下标、比较多少次，<strong>完全由 n 决定，与数据的值无关</strong>。这带来两个对 GPU 极友好的性质：
+  <div class="box-title">核心动机：底向上构造 + 层内独立比较</div>
+  Bitonic sort 最适合 GPU 的地方，不只是它是一个<strong>排序网络(sorting network)</strong>，而是它把排序拆成了一棵非常规整的"构造树"：先把长度 2 的小块排好，再合成长 4、8、16 ... 的有序块。<strong>每一层内部的 compare-exchange pair 互不重叠</strong>，一个元素在同一个 sub-stage 只会参与一次比较，因此这一层可以同时铺开给大量 CUDA threads 做。
   <ul class="lst" style="margin:8px 0 0;">
-    <li>同一个 sub-stage 里的 n/2 个比较<strong>彼此独立</strong> → 天然可并行；</li>
-    <li>没有依赖数据的分支去决定"下一步比谁" → 控制流规整，warp 发散小。</li>
+    <li><strong>层内依赖小</strong>：同一个 sub-stage 里的 n/2 个比较彼此独立，天然可并行；</li>
+    <li><strong>层间依赖清楚</strong>：必须等上一轮 compare-exchange 完成，才能进入下一轮，所以同步边界明确；</li>
+    <li><strong>比较模式固定</strong>：要比较哪些下标、升序还是降序完全由 n 和层号决定，不依赖数据值，控制流规整、warp 发散小。</li>
   </ul>
 </div>
 
-<p>对比作业背景里提到的<strong>朴素并行 mergesort</strong>：每轮归并活跃线程减半，最后一次归并几乎只剩极少线程在干活 —— 在 NSight 上你会看到后期 kernel 的 <strong>Achieved Occupancy 掉到个位数</strong>。而 bitonic sort 的<strong>每一个 sub-stage 都有 n/2 个比较同时进行</strong>，并行度自始至终保持饱满。代价是它做的比较更多（<code>O(n log²n)</code> 个比较 vs mergesort 的 <code>O(n log n)</code>），但在 GPU 上"规整且高并行"往往比"比较次数少但并行度差"跑得更快。</p>
+<p>换句话说，bitonic sort 的递归树可以用<strong>底向上</strong>的迭代方式 build 出来：每个 stage 把更小的有序/双调块合成更大的块；每个 sub-stage 又是一批距离相同的 pairwise compare-exchange。GPU 喜欢的正是这种形态：<strong>同一批任务数量大、粒度一致、互不抢同一个位置、只在批次之间同步</strong>。</p>
+
+<p>对比作业背景里提到的<strong>朴素并行 mergesort</strong>：每轮归并活跃线程减半，最后一次归并几乎只剩极少线程在干活 —— 在 NSight 上你会看到后期 kernel 的 <strong>Achieved Occupancy 掉到个位数</strong>。而 bitonic sort 的<strong>每一个 sub-stage 都有 n/2 个独立比较同时进行</strong>，并行度自始至终保持饱满。代价是它做的比较更多（<code>O(n log²n)</code> 个比较 vs mergesort 的 <code>O(n log n)</code>），但在 GPU 上"规整且高并行"往往比"比较次数少但并行度差"跑得更快。</p>
 
 <div class="box warn">
   <div class="box-title">前提</div>
@@ -209,11 +212,17 @@
 <div class="box tip" style="font-family:monospace;font-size:14px;">
   BM(n) = BS(n) + BS(n/2) + … + BS(2) = O(log n)
 </div>
-<p>而要从一个<strong>乱序</strong>数组开始，得先"造"出双调序列：从长度 2 的小段开始，交替按升序/降序排，拼成长度 4 的双调序列，再合并成有序的 4；如此倍增。整套下来：</p>
+<p>而要从一个<strong>乱序</strong>数组开始，得先"造"出双调序列。实现上通常不是写递归，而是<strong>底向上迭代</strong>：</p>
+<ol class="lst">
+  <li>先处理长度 2 的小段：相邻元素两两 compare-exchange，一半升序、一半降序。</li>
+  <li>再把两个长度 2 的有序段拼成长度 4 的双调段，并通过多个 sub-stage 合并成有序段。</li>
+  <li>继续合成长 8、16、32 ... 的块，直到整个数组有序。</li>
+</ol>
+<p>关键是：在固定的 <code>i, j</code> 下，每个下标 <code>k</code> 只会和 <code>k^(1&lt;&lt;j)</code> 形成一个 pair；所有 pair 互不重叠，所以这一层比较可以并行执行。整套下来：</p>
 <div class="box tip" style="font-family:monospace;font-size:14px;">
   BitonicSort(n) = BM(2) + BM(4) + … + BM(n) = O(log²n) 个阶段
 </div>
-<p>每个阶段对 n 个元素做 n/2 次比较，所以总比较数约 <code>(n/2)·log²n = O(n log²n)</code>。下一节用动画把这整个过程跑给你看。</p>
+<p>每个 sub-stage 对 n 个元素做 n/2 次独立比较，总比较数约 <code>(n/2)·log²n = O(n log²n)</code>。这里的 <code>log²n</code> 不是串行递归深度那么简单，而是"stage 数 × 每个 stage 里的 pass 数"：同一个 pass 里的比较可以同时做，pass 与 pass 之间才需要同步。下一节用动画把这整个底向上的构造过程跑给你看。</p>
 
 <div class="quiz" data-correct="2">
   <div class="q-label">Quiz · 为什么适合 GPU</div>
@@ -221,11 +230,11 @@
   <ul class="options">
     <li data-i="0"><span class="marker">A.</span>因为它的总比较次数更少</li>
     <li data-i="1"><span class="marker">B.</span>因为它能排序任意长度的数组</li>
-    <li data-i="2"><span class="marker">C.</span>它是数据无关的排序网络，每个 sub-stage 有 n/2 个独立比较、并行度始终饱满、控制流规整</li>
+    <li data-i="2"><span class="marker">C.</span>它能底向上构造整体有序块，每个 sub-stage 有 n/2 个独立比较、并行度始终饱满、控制流规整</li>
     <li data-i="3"><span class="marker">D.</span>因为它完全不需要任何同步</li>
   </ul>
   <div class="explanation">
-    <b>C</b>。优势在<b>规整的高并行</b>：比较序列与数据无关，每个 sub-stage 都是 n/2 个独立比较。它的比较次数其实<b>更多</b>（O(n log²n)，A 错）；只能处理 2 的幂（B 错）；sub-stage 之间仍需<b>同步</b>（D 错，这正是后面多次 kernel launch 的原因）。
+    <b>C</b>。优势在<b>规整的高并行</b>：bitonic sort 底向上合并越来越大的块，同一个 sub-stage 里的 pair 互不重叠，可以一次铺开 n/2 个独立比较。它的比较次数其实<b>更多</b>（O(n log²n)，A 错）；只能处理 2 的幂（B 错）；sub-stage 之间仍需<b>同步</b>（D 错，这正是后面多次 kernel launch 的原因）。
   </div>
 </div>
 
